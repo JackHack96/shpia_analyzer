@@ -1,10 +1,10 @@
 # SHPIA JSON Parser - Sensor Data Processing Suite
 
-This suite contains two Python scripts for processing sensor data and determining location based on RSSI (Received Signal Strength Indicator) values.
+This suite contains two Python scripts for processing sensor data collected using SHPIA (https://github.com/IoT4CareLab/SHPIA/tree/Versione2) and determining location based on RSSI (Received Signal Strength Indicator) values.
 
 ## Scripts Overview
 
-### 1. `main.py` - Data Aggregation Script
+### 1. `convert.py` - Data Aggregation Script
 Aggregates sensor data from JSON files by MAC address, creating a unified view of all sensor readings for each device.
 
 ### 2. `location_analyzer.py` - Location Analysis Script
@@ -14,7 +14,7 @@ Processes aggregated sensor data to determine the closest location for each time
 
 ### Step 1: Aggregate Raw Data
 ```bash
-python main.py data/data.json -o data/output.json
+python convert.py data/data.json -o data/output.json
 ```
 
 ### Step 2: Analyze Location
@@ -27,7 +27,7 @@ python location_analyzer.py data/output.json --labels kitchen sofa office -o dat
 ```
 Raw JSON Data → Aggregation → Location Analysis → Results
     ↓              ↓              ↓              ↓
-data.json → main.py → output.json → location_analyzer.py → analysis.json
+data.json → convert.py → output.json → location_analyzer.py → analysis.json
 ```
 
 ## Usage Examples
@@ -35,10 +35,10 @@ data.json → main.py → output.json → location_analyzer.py → analysis.json
 ### Basic Data Aggregation
 ```bash
 # Aggregate data and print to console
-python main.py data/data.json
+python convert.py data/data.json
 
 # Aggregate data and save to file
-python main.py data/data.json -o data/aggregated_output.json
+python convert.py data/data.json -o data/aggregated_output.json
 ```
 
 ### Location Analysis Options
@@ -72,7 +72,7 @@ python location_analyzer.py data/output.json --labels kitchen sofa office -o res
 
 ## Output Files
 
-### From `main.py`
+### From `convert.py`
 - **Aggregated JSON**: Contains sensor data grouped by MAC address
 - **Structure**: `{MAC_ADDRESS: {sensor_type: {timestamp: value}}}`
 
@@ -149,7 +149,7 @@ python location_analyzer.py data/output.json --labels kitchen sofa office -o res
 
 ## Parameters
 
-### `main.py`
+### `convert.py`
 - `input_file`: Path to input JSON file
 - `-o, --output`: Output file path (optional)
 
