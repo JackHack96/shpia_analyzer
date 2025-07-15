@@ -6,10 +6,10 @@ view of all sensor readings for each device. It's designed to process JSON array
 containing sensor records with MAC addresses and various sensor measurements.
 
 Usage:
-    python main.py input_file.json [-o output_file.json]
+    python conver.py input_file.json [-o output_file.json]
 
 Example:
-    python main.py data.json -o aggregated_output.json
+    python conver.py data.json -o aggregated_output.json
 """
 
 import json
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     # Set up command line argument parser
     parser = argparse.ArgumentParser(
         description='Aggregate JSON sensor data by MAC address',
-        epilog='Example: python main.py data.json -o aggregated_output.json'
+        epilog='Example: python conver.py data.json -o aggregated_output.json'
     )
     
     # Define required positional argument for input file
