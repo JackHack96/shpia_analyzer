@@ -741,7 +741,7 @@ def main():
     """
     parser = argparse.ArgumentParser(
         description='Analyze location and activity from dual sensor data (BLE beacons + Nordic Thingy)',
-        epilog='Example: python location_analyzer.py data/output.json -o analysis.json --time-window 5 --beacon-labels kitchen sofa --object-labels bottle cup'
+        epilog='Example: python location_analyzer.py data/output.json -o analysis.json --time-window 5 --beacon-labels kitchen sofa bedroom --object-labels bottle cup keys'
     )
     
     parser.add_argument(
@@ -763,21 +763,14 @@ def main():
     
     parser.add_argument(
         '--beacon-labels',
-        nargs='+',
-        help='Custom location labels for BLE beacons (space-separated)'
+        nargs='*',
+        help='Custom location labels for BLE beacons (space-separated). If fewer labels than beacons, remaining will use defaults.'
     )
     
     parser.add_argument(
         '--object-labels',
-        nargs='+',
-        help='Custom object labels for Nordic Thingy devices (space-separated)'
-    )
-    
-    # Legacy support for --labels parameter
-    parser.add_argument(
-        '--labels',
-        nargs='+',
-        help='Legacy: Custom labels for all devices (deprecated, use --beacon-labels and --object-labels)'
+        nargs='*',
+        help='Custom object labels for Nordic Thingy devices (space-separated). If fewer labels than objects, remaining will use defaults.'
     )
     
     args = parser.parse_args()
@@ -797,50 +790,18 @@ def main():
         print("Analyzing location and activity from dual sensor data...")
         results = analyze_location_and_activity(aggregated_data, args.time_window)
         
-        # Override labels if provided
+        # Apply custom labels if provided
         if args.beacon_labels:
             beacon_macs = list(results["analysis_settings"]["beacon_labels"].keys())
-            if len(args.beacon_labels) != len(beacon_macs):
-                print(f"Warning: Number of beacon labels ({len(args.beacon_labels)}) doesn't match number of beacons ({len(beacon_macs)})")
-            else:
-                # Update beacon labels
-                new_beacon_labels = {}
-                for i, mac in enumerate(beacon_macs):
-                    new_beacon_labels[mac] = args.beacon_labels[i]
-                results["analysis_settings"]["beacon_labels"] = new_beacon_labels
-                update_labels_in_results(results, new_beacon_labels, "beacon")
+            new_beacon_labels = apply_custom_labels(beacon_macs, args.beacon_labels, "beacon")
+            results["analysis_settings"]["beacon_labels"] = new_beacon_labels
+            update_labels_in_results(results, new_beacon_labels, "beacon")
         
         if args.object_labels:
             object_macs = list(results["analysis_settings"]["object_labels"].keys())
-            if len(args.object_labels) != len(object_macs):
-                print(f"Warning: Number of object labels ({len(args.object_labels)}) doesn't match number of objects ({len(object_macs)})")
-            else:
-                # Update object labels
-                new_object_labels = {}
-                for i, mac in enumerate(object_macs):
-                    new_object_labels[mac] = args.object_labels[i]
-                results["analysis_settings"]["object_labels"] = new_object_labels
-                update_labels_in_results(results, new_object_labels, "object")
-        
-        # Legacy support for --labels parameter
-        if args.labels and not args.beacon_labels and not args.object_labels:
-            print("Warning: --labels parameter is deprecated. Use --beacon-labels and --object-labels instead.")
-            all_macs = list(results["analysis_settings"]["beacon_labels"].keys()) + list(results["analysis_settings"]["object_labels"].keys())
-            if len(args.labels) == len(all_macs):
-                beacon_count = len(results["analysis_settings"]["beacon_labels"])
-                if beacon_count > 0:
-                    new_beacon_labels = {}
-                    for i, mac in enumerate(list(results["analysis_settings"]["beacon_labels"].keys())):
-                        new_beacon_labels[mac] = args.labels[i]
-                    results["analysis_settings"]["beacon_labels"] = new_beacon_labels
-                    update_labels_in_results(results, new_beacon_labels, "beacon")
-                
-                if len(args.labels) > beacon_count:
-                    new_object_labels = {}
-                    for i, mac in enumerate(list(results["analysis_settings"]["object_labels"].keys())):
-                        new_object_labels[mac] = args.labels[beacon_count + i]
-                    results["analysis_settings"]["object_labels"] = new_object_labels
-                    update_labels_in_results(results, new_object_labels, "object")
+            new_object_labels = apply_custom_labels(object_macs, args.object_labels, "object")
+            results["analysis_settings"]["object_labels"] = new_object_labels
+            update_labels_in_results(results, new_object_labels, "object")
         
         # Generate comprehensive report
         comprehensive_report = generate_comprehensive_report(results)
@@ -868,6 +829,55 @@ def main():
         exit(1)
 
 
+def apply_custom_labels(mac_addresses, custom_labels, sensor_type):
+    """
+    Apply custom labels to MAC addresses, handling arbitrary numbers of labels.
+    
+    Args:
+        mac_addresses (list): List of MAC addresses
+        custom_labels (list): List of custom labels
+        sensor_type (str): Either "beacon" or "object"
+        
+    Returns:
+        dict: MAC to label mapping with custom labels applied
+    """
+    if not custom_labels:
+        return assign_sensor_labels(mac_addresses, sensor_type)
+    
+    mac_to_label = {}
+    
+    # Apply custom labels for as many devices as we have labels
+    for i, mac in enumerate(mac_addresses):
+        if i < len(custom_labels):
+            mac_to_label[mac] = custom_labels[i]
+        else:
+            # Use default labeling for remaining devices
+            if sensor_type == "beacon":
+                default_labels = ["kitchen", "living_room", "bedroom", "bathroom", "office", "hallway", "balcony", "dining_room"]
+            else:  # object
+                default_labels = ["bottle", "toothbrush", "phone", "keys", "wallet", "book", "cup", "remote"]
+            
+            # Find next available default label or create indexed label
+            used_labels = set(mac_to_label.values())
+            available_defaults = [label for label in default_labels if label not in used_labels]
+            
+            if available_defaults:
+                mac_to_label[mac] = available_defaults[0]
+            else:
+                mac_to_label[mac] = f"{sensor_type}_{i+1}"
+    
+    # Print info about label assignment
+    num_custom = min(len(custom_labels), len(mac_addresses))
+    num_default = len(mac_addresses) - num_custom
+    
+    if num_custom > 0:
+        print(f"Applied {num_custom} custom {sensor_type} labels")
+    if num_default > 0:
+        print(f"Used default labels for {num_default} remaining {sensor_type}s")
+    
+    return mac_to_label
+
+
 def update_labels_in_results(results, new_labels, label_type):
     """
     Update labels throughout the results structure.
@@ -882,14 +892,15 @@ def update_labels_in_results(results, new_labels, label_type):
         # Update location frequency with new labels
         old_location_freq = results["activity_summary"].get("location_frequency", {})
         new_location_freq = {}
+        
+        # Create reverse mapping from old labels to MAC addresses
         old_beacon_labels = {v: k for k, v in results["analysis_settings"]["beacon_labels"].items()}
         
         for old_label, count in old_location_freq.items():
-            # Find MAC for this old label
-            for mac, new_label in new_labels.items():
-                if old_beacon_labels.get(old_label) == mac:
-                    new_location_freq[new_label] = count
-                    break
+            # Find MAC for this old label and get new label
+            mac = old_beacon_labels.get(old_label)
+            if mac and mac in new_labels:
+                new_location_freq[new_labels[mac]] = count
         
         results["activity_summary"]["location_frequency"] = new_location_freq
         
@@ -901,14 +912,15 @@ def update_labels_in_results(results, new_labels, label_type):
         # Update object interaction frequency
         old_object_freq = results["activity_summary"].get("object_interaction_frequency", {})
         new_object_freq = {}
+        
+        # Create reverse mapping from old labels to MAC addresses
         old_object_labels = {v: k for k, v in results["analysis_settings"]["object_labels"].items()}
         
         for old_label, count in old_object_freq.items():
-            # Find MAC for this old label
-            for mac, new_label in new_labels.items():
-                if old_object_labels.get(old_label) == mac:
-                    new_object_freq[new_label] = count
-                    break
+            # Find MAC for this old label and get new label
+            mac = old_object_labels.get(old_label)
+            if mac and mac in new_labels:
+                new_object_freq[new_labels[mac]] = count
         
         results["activity_summary"]["object_interaction_frequency"] = new_object_freq
     
@@ -921,13 +933,15 @@ def update_location_analysis_labels(location_analysis, new_labels):
     if "location_summary" in location_analysis:
         old_summary = location_analysis["location_summary"]
         new_summary = {}
-        old_labels = {v: k for k, v in new_labels.items()}
+        
+        # Create reverse mapping from new labels to MAC addresses
+        reverse_new_labels = {v: k for k, v in new_labels.items()}
         
         for old_label, count in old_summary.items():
-            for mac, new_label in new_labels.items():
-                if old_labels.get(old_label) == mac:
-                    new_summary[new_label] = count
-                    break
+            # Find MAC for this old label and get new label
+            mac = reverse_new_labels.get(old_label)
+            if mac and mac in new_labels:
+                new_summary[new_labels[mac]] = count
         
         location_analysis["location_summary"] = new_summary
     
@@ -972,33 +986,30 @@ def update_combined_analysis_labels(combined_analysis, new_labels, label_type):
             # Update object interactions
             object_interactions = window_data.get("object_interactions", {})
             new_object_interactions = {}
-            old_object_labels = {v: k for k, v in new_labels.items()}
+            
+            # Create reverse mapping from new labels to MAC addresses
+            reverse_new_labels = {v: k for k, v in new_labels.items()}
             
             for old_label, interaction_data in object_interactions.items():
-                # Find new label for this old label
-                found = False
-                for mac, new_label in new_labels.items():
-                    if old_object_labels.get(old_label) == mac:
-                        new_object_interactions[new_label] = interaction_data
-                        found = True
-                        break
-                
-                if not found:
+                # Find MAC for this old label and get new label
+                mac = reverse_new_labels.get(old_label)
+                if mac and mac in new_labels:
+                    new_object_interactions[new_labels[mac]] = interaction_data
+                else:
                     new_object_interactions[old_label] = interaction_data
             
             window_data["object_interactions"] = new_object_interactions
         
         # Update context inference
         context = window_data.get("context_inference", {})
-        if context and "active_objects" in context:
+        if context and "active_objects" in context and label_type == "object":
+            reverse_new_labels = {v: k for k, v in new_labels.items()}
             for obj_info in context["active_objects"]:
                 old_obj_name = obj_info["object"]
-                if label_type == "object":
-                    # Find new object name
-                    for mac, new_label in new_labels.items():
-                        if old_object_labels.get(old_obj_name) == mac:
-                            obj_info["object"] = new_label
-                            break
+                # Find MAC for this old object name and get new label
+                mac = reverse_new_labels.get(old_obj_name)
+                if mac and mac in new_labels:
+                    obj_info["object"] = new_labels[mac]
 
 
 if __name__ == "__main__":
